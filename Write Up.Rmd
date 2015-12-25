@@ -1,0 +1,175 @@
+---
+title: "Practical Machine Learning Project"
+author: "equinaut"
+date: "December 21, 2015"
+output: html_document
+---
+
+
+# Environment Setup
+```{r, echo=T, message=F, warning=F}
+# Libraries
+library(ggplot2)
+library(caret)
+library(earth)
+library(gbm)
+library(randomForest)
+
+# Settings
+set.seed(seed = 393, kind = "Mersenne-Twister")
+```
+
+# Data Processing
+```{r, echo=T, cache=T, warning=F, message=F}
+# Raw Data
+d <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+
+# 80% training, 20% validation, 20 records testing
+# Training set
+inTraining <- createDataPartition(y = d$classe, p = .80, list = FALSE)
+training <- d[inTraining,]
+
+# Validation set
+validation <- d[-inTraining,]
+
+# Testing set
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+# Feature Selection / Data Transformations
+
+First we identify columns with near zero variance, indicating that there's a high prevalence of homogeniety among the values and subsequently they will serve little predictive utility.
+
+```{r, echo=T}
+nzvFeatures <- nearZeroVar(training, saveMetrics = T)
+
+training.t1 <- training[,!nzvFeatures$nzv]
+```
+
+Since our goal is to determine whether an exercise was performed correctly, we will remove features not reasonably related to performing the activity.
+
+```{r, echo=T}
+training.t2 <- training.t1[,7:ncol(training.t1)]
+```
+
+There is a high prevalence of `NA` records in certain columns. To improve the performance of the machine learning algorithms, features with >= 50% of their records missing will be excluded.
+
+```{r, echo=T}
+training.t2 <- training.t2[,apply(training.t2, 2, function(x) sum(is.na(x)) / length(x) < .50)]
+dim(training.t2)
+```
+
+Next we will examine the correlation between the features. Instances where correlation is high will call for a compression of the variables.
+
+```{r, echo=T}
+# Correlation matrix
+cor.mat.pearson <- abs(cor(subset(training.t2, select = -classe), 
+                       method = "pearson", 
+                       use = "complete.obs"))
+diag(cor.mat.pearson) <- 0
+
+# Find correlations with pearson's linear method
+cor.fcor.pearson <- findCorrelation(cor.mat.pearson, cutoff = .90)
+
+cor.fcor.pearson
+```
+
+Given the presence of highly correlated variables, we will run a PCA compression on the data set. As the output indicates, the 52 remaining features can be reduced to 25 components.
+
+```{r, echo=T}
+# Compress via PCA
+preProc <- preProcess(training.t2, method = "pca")
+preProc
+
+training.t3 <- predict(preProc,training.t2[,!colnames(training.t2) == "classe"])
+names <- colnames(training.t3)
+training.t3 <- cbind(training.t2$classe, training.t3)
+colnames(training.t3) <- c("classe", names)
+```
+
+Before we move on to the model development, we will apply the above transformations to both the validation and testing data sets.
+
+```{r, echo=T}
+validation.t <- validation[,colnames(validation) %in% colnames(training.t2)]
+
+validation.t <- predict(preProc,validation.t[,!colnames(validation.t) == "classe"])
+names <- colnames(validation.t)
+validation.t <- cbind(validation$classe, validation.t)
+colnames(validation.t) <- c("classe", names)
+
+testing.t <- testing[,colnames(testing) %in% colnames(training.t2)]
+testing.t <- predict(preProc, testing.t)
+
+```
+
+
+```{r, echo=F, warning=F,message=F}
+training.t3 <- data.frame(training.t3$classe, 
+                apply(subset(training.t3, select=-classe), 2, function(x) as.numeric(x)))
+colnames(training.t3) <- c("classe", colnames(training.t3)[2:ncol(training.t3)])
+validation.t <- data.frame(validation.t$classe, 
+                apply(subset(validation.t, select=-classe), 2, function(x) as.numeric(x)))
+colnames(validation.t) <- c("classe", colnames(validation.t)[2:ncol(validation.t)])
+testing.t <- apply(testing.t, 2, function(x) as.numeric(x))
+```
+
+# Model Development
+
+Three separate models will be developed on the training dataset and then compared via the validation set. The best performing of these--measured by predictive ability--will then be run on the testing dataset. The 3 modeling methods employed are:
+
+- Generalized Boosted Regression
+
+- Multivariate Adaptive Regression Spline
+
+- Random Forest
+
+```{r, echo=T, cache=T, warning=F, message=F, results='hide'}
+# Generalized Boosted Regression Model
+modelFit.gbm <- train(classe~., data = training.t3, method="gbm")
+```
+```{r, echo=T, cache=T, warning=F, message=F, results='hide'}
+# Multivariate Adaptive Regression Spline
+modelFit.rsp <- train(classe~., data = training.t3, method="earth")
+```
+```{r, echo=T, cache=T, warning=F, message=F, results='hide'}
+# Random Forest
+modelFit.rnf <- train(classe~., data = training.t3, method="rf")
+```
+
+### Performance Against Validation Set
+```{r, echo=T}
+pred.gbm <- predict(modelFit.gbm, validation.t)
+pred.rsp <- predict(modelFit.rsp, validation.t)
+pred.rnf <- predict(modelFit.rnf, validation.t)
+```
+
+The above predictions had an overall accuracy of 81.49%, 52.64%, and 97.99%, respectively. Below is the confusion matrix of the latter, belonging to the random forest model:
+
+```{r, echo=F}
+# rnf
+confusionMatrix(pred.rnf, validation.t$classe)
+```
+
+The expected sample error rate at `alpha=.05` is between 1.6% and 2.5%. 
+
+### Final Test Set
+
+The below functions and code will generate predictions for the 20 cases in the test set.
+
+```{r, echo=T}
+# Predict answers
+answers <- predict(modelFit.rnf, testing.t)
+
+# Function to write a file for each prediction
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+# Call Function
+pml_write_files(answers)
+```
+
+The above submission resulted in 19/20 correct predictions.
