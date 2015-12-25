@@ -71,7 +71,7 @@ img {
 <div id="environment-setup" class="section level1">
 <h1>Environment Setup</h1>
 <pre class="r"><code># Libraries
-library(ggplot2)
+library(plyr)
 library(caret)
 library(earth)
 library(gbm)
@@ -94,7 +94,13 @@ training &lt;- d[inTraining,]
 validation &lt;- d[-inTraining,]
 
 # Testing set
-testing &lt;- read.csv(&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;)</code></pre>
+testing &lt;- read.csv(&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;)
+
+rbind(dim(training), dim(validation), dim(testing))</code></pre>
+<pre><code>##       [,1] [,2]
+## [1,] 15699  160
+## [2,]  3923  160
+## [3,]    20  160</code></pre>
 </div>
 <div id="feature-selection-data-transformations" class="section level1">
 <h1>Feature Selection / Data Transformations</h1>
@@ -168,6 +174,8 @@ modelFit.rnf &lt;- train(classe~., data = training.t3, method=&quot;rf&quot;)</c
 pred.rsp &lt;- predict(modelFit.rsp, validation.t)
 pred.rnf &lt;- predict(modelFit.rnf, validation.t)</code></pre>
 <p>The above predictions had an overall accuracy of 81.49%, 52.64%, and 97.99%, respectively. Below is the confusion matrix of the latter, belonging to the random forest model:</p>
+<pre class="r"><code># rnf
+confusionMatrix(pred.rnf, validation.t$classe)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference

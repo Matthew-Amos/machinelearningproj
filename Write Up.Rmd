@@ -9,7 +9,7 @@ output: html_document
 # Environment Setup
 ```{r, echo=T, message=F, warning=F}
 # Libraries
-library(ggplot2)
+library(plyr)
 library(caret)
 library(earth)
 library(gbm)
@@ -34,6 +34,8 @@ validation <- d[-inTraining,]
 
 # Testing set
 testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+
+rbind(dim(training), dim(validation), dim(testing))
 ```
 # Feature Selection / Data Transformations
 
@@ -102,7 +104,7 @@ testing.t <- predict(preProc, testing.t)
 ```
 
 
-```{r, echo=F, warning=F,message=F}
+```{r, echo=F, warning=F,message=F,results=F}
 training.t3 <- data.frame(training.t3$classe, 
                 apply(subset(training.t3, select=-classe), 2, function(x) as.numeric(x)))
 colnames(training.t3) <- c("classe", colnames(training.t3)[2:ncol(training.t3)])
@@ -144,7 +146,7 @@ pred.rnf <- predict(modelFit.rnf, validation.t)
 
 The above predictions had an overall accuracy of 81.49%, 52.64%, and 97.99%, respectively. Below is the confusion matrix of the latter, belonging to the random forest model:
 
-```{r, echo=F}
+```{r, echo=T}
 # rnf
 confusionMatrix(pred.rnf, validation.t$classe)
 ```
