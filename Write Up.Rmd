@@ -146,7 +146,7 @@ pred.rnf <- predict(modelFit.rnf, validation.t)
 
 The above predictions had an overall accuracy of 81.49%, 52.64%, and 97.99%, respectively. Below is the confusion matrix of the latter, belonging to the random forest model:
 
-```{r, echo=T}
+```{r, echo=T, results='show'}
 # rnf
 confusionMatrix(pred.rnf, validation.t$classe)
 ```
